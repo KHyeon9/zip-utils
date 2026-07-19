@@ -25,13 +25,13 @@ ZIP 파일을 지정한 경로에 안전하게 압축 해제하며, 문자셋(Ch
 Path zipFile = Path.of("sample.zip");
 Path targetPath = Path.of("output");
 
-int count = ZipExtractor.unzip(zipFile, targetPath);
+int count = ZipExtractor.extract(zipFile, targetPath);
 ```
 
 ### Charset 지정
 
 ```java
-ZipExtractor.unzip(
+ZipExtractor.extract(
     zipFile,
     targetPath,
     Charset.forName("MS949")
@@ -41,7 +41,7 @@ ZipExtractor.unzip(
 ### 덮어쓰기 비활성화
 
 ```java
-ZipExtractor.unzip(
+ZipExtractor.extract(
     zipFile,
     targetPath,
     StandardCharsets.UTF_8,
@@ -53,9 +53,9 @@ ZipExtractor.unzip(
 
 | 메서드 | 설명 |
 |--------|------|
-| `unzip(Path, Path)` | UTF-8로 압축 해제 |
-| `unzip(Path, Path, Charset)` | Charset 지정 |
-| `unzip(Path, Path, Charset, boolean)` | Charset 및 덮어쓰기 여부 지정 |
+| `extract(Path, Path)` | UTF-8로 압축 해제 |
+| `extract(Path, Path, Charset)` | Charset 지정 |
+| `extract(Path, Path, Charset, boolean)` | Charset 및 덮어쓰기 여부 지정 |
 
 ## 예외
 
