@@ -1,6 +1,7 @@
 package io.github.khyeon9.ziputils;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -8,7 +9,8 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Objects;
-import java.util.zip.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * ZIP 파일을 지정한 디렉터리에 압축 해제하는 유틸리티 클래스.
@@ -23,21 +25,21 @@ public final class ZipExtractor {
     private ZipExtractor() {
         throw new UnsupportedOperationException("Utility class");
     }
-    // 기본 Charset
+    // 기본 ZIP Entry 문자셋
     private static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
 
     /**
      * 기본 문자셋(UTF-8) 및 기존 파일 덮어쓰기 모드로 ZIP 파일을 압축 해제합니다.
      */
-    public static int unzip(Path zipFile, Path targetPath) throws IOException {
-        return unzip(zipFile, targetPath, DEFAULT_CHARSET, true);
+    public static int extract(Path zipFile, Path targetPath) throws IOException {
+        return extract(zipFile, targetPath, DEFAULT_CHARSET, true);
     }
 
     /**
      * 지정한 문자셋 및 기존 파일 덮어쓰기 모드로 ZIP 파일을 압축 해제합니다.
      */
-    public static int unzip(Path zipFile, Path targetPath, Charset charset) throws IOException {
-        return unzip(zipFile, targetPath, charset, true);
+    public static int extract(Path zipFile, Path targetPath, Charset charset) throws IOException {
+        return extract(zipFile, targetPath, charset, true);
     }
 
     /**
@@ -46,13 +48,12 @@ public final class ZipExtractor {
      * @param zipFile    ZIP 파일 경로
      * @param targetPath 압축을 풀 대상 디렉터리 경로
      * @param charset    ZIP 엔트리 이름을 해석할 문자셋
-     * @param overwrite  기존 파일이 존재할 경우 덮어쓸지 여부
+     * @param overwrite  true이면 기존 파일을 덮어쓰고, false이면 기존 파일이 존재할 경우 건너뜀
      * @return 압축 해제된 파일의 총 개수 (디렉터리 제외)
      * @throws NoSuchFileException 원본 ZIP 파일이 존재하지 않거나 정규 파일이 아닌 경우
      * @throws IOException         압축 해제 중 입출력 오류가 발생하거나 Zip Slip이 감지된 경우
      */
-    public static int unzip(Path zipFile, Path targetPath, Charset charset, boolean overwrite) throws IOException {
-        // null 입력 방지
+    public static int extract(Path zipFile, Path targetPath, Charset charset, boolean overwrite) throws IOException {
         Objects.requireNonNull(zipFile, "zipFile이 null입니다.");
         Objects.requireNonNull(targetPath, "targetPath가 null입니다.");
         Objects.requireNonNull(charset, "charset이 null입니다.");
@@ -63,7 +64,7 @@ public final class ZipExtractor {
 
         Files.createDirectories(targetPath);
 
-        // try-with-resources 구문으로 inputStream와 zipInputStream가 무조건 close되도록 보장
+        // ZIP 입력 스트림 생성
         try (
                 InputStream inputStream = Files.newInputStream(zipFile);
                 ZipInputStream zipInputStream = new ZipInputStream(inputStream, charset)
@@ -72,26 +73,33 @@ public final class ZipExtractor {
             ZipEntry zipEntry;
 
             while ((zipEntry = zipInputStream.getNextEntry()) != null) {
-                Path target = resolveEntry(targetPath, zipEntry);
-
-                if (zipEntry.isDirectory()) {
-                    Files.createDirectories(target);
-                } else {
-                    Files.createDirectories(target.getParent());
-                    // 기존 파일이 존재하고 overwrite = false인 경우 건너뜀
-                    if (!overwrite && Files.exists(target)) {
-                        zipInputStream.closeEntry();
+                try {
+                    Path target = resolveEntry(targetPath, zipEntry);
+                    if (zipEntry.isDirectory()) {
+                        Files.createDirectories(target);
                         continue;
                     }
-                    Files.copy(zipInputStream, target, StandardCopyOption.REPLACE_EXISTING);
+
+                    Files.createDirectories(target.getParent());
+                    // 덮어쓰기 가능한 유무에 따른 구분
+                    if (overwrite) {
+                        Files.copy(
+                                zipInputStream,
+                                target,
+                                StandardCopyOption.REPLACE_EXISTING
+                        );
+                    } else {
+                        if (Files.exists(target)) {
+                            continue;
+                        }
+                        Files.copy(zipInputStream, target);
+                    }
                     extracted++;
+                } finally {
+                    zipInputStream.closeEntry();
                 }
-                zipInputStream.closeEntry();
             }
             return extracted;
-        } catch (IOException ex) {
-            // 예외 정보 반환
-            throw new IOException(String.format("압축 해제 실패 (원본) %s -> (목적지) %s", zipFile, targetPath), ex);
         }
     }
 
